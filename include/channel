@@ -1,0 +1,35 @@
+// Copyright 2014, Alex Horn. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+#ifndef _CPP_CHANNEL
+#define _CPP_CHANNEL
+
+#include <channel.h>
+
+namespace cpp
+{
+
+/// RAII thread
+class thread_guard
+{
+private:
+  std::thread& m_thread;
+
+public:
+  explicit thread_guard(std::thread& thread)
+  : m_thread(thread) {}
+
+  thread_guard(const thread_guard&) = delete;
+  thread_guard& operator=(const thread_guard&) = delete;
+
+  ~thread_guard()
+  {
+    if (m_thread.joinable())
+      m_thread.join();
+  }
+};
+
+}
+
+#endif
