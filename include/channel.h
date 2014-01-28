@@ -384,7 +384,7 @@ T internal::_channel<T, N>::recv()
   // and m_buffer.size() <= N, i.e. !is_full(). Therefore, s can
   // proceed, as required.
   m_send_end_cv.notify_one();
-  return pair.second;
+  return std::move(pair.second);
 }
 
 template<typename T, size_t N>
