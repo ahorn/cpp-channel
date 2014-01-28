@@ -21,12 +21,16 @@ namespace cpp
 namespace internal
 {
 
+#if __cplusplus <= 201103L
 // since C++14 in std, see Herb Sutter's blog
 template<class T, class ...Args>
 std::unique_ptr<T> make_unique(Args&& ...args)
 {
   return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
+#else
+  using std::make_unique;
+#endif
 
 template<class T>
 struct _is_exception_safe :
@@ -421,7 +425,6 @@ std::unique_ptr<T> internal::_channel<T, N>::recv_ptr()
   m_buffer.pop_front();
   assert(!is_full());
 
-  // TODO: use std when in C++14 mode
   std::unique_ptr<T> t_ptr(make_unique<T>(std::move(pair.second)));
 
   // unlock before notifying threads; otherwise, the
