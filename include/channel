@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-#ifndef _CPP_CHANNEL
-#define _CPP_CHANNEL
+#ifndef CPP_CHANNEL
+#define CPP_CHANNEL
 
 #include <channel.h>
 
