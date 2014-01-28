@@ -101,7 +101,8 @@ template<typename T, std::size_t N> class ochannel;
 
 /// Go-style concurrency
 
-/// Thread synchronization mechanism as in the Go language
+/// Thread synchronization mechanism as in the Go language.
+/// As in Go, cpp::channel<T, N> are first-class values.
 ///
 /// Unlike Go, however, cpp::channels<T, N> cannot be nil
 /// not closed. This simplifies the usage of the library.
@@ -120,6 +121,7 @@ template<typename T, std::size_t N> class ochannel;
 /// \see http://golang.org/ref/spec#Channel_types
 /// \see http://golang.org/ref/spec#Send_statements
 /// \see http://golang.org/ref/spec#Receive_operator
+/// \see http://golang.org/doc/effective_go.html#chan_of_chan
 template<class T, std::size_t N = 0>
 class channel
 {

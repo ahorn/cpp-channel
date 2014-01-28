@@ -34,8 +34,13 @@ int main() {
 }
 ```
 
-The [source code repository][test] contains several more including
-the most standard example of them all, Dijkstra's dining philosophers.
+As in Go, `cpp::channel<T, N>` are first-class values. In particular,
+channel `c` in the example is passed by value to the newly created threads.
+
+The [source code repository][test] contains several more examples including
+the most standard one of them all, Dijkstra's dining philosophers. In fact,
+it also shows the use of `std::ref` for a `dining_table` struct as these
+are typically not passed by value.
 
 [test]: https://github.com/ahorn/cpp-channel/blob/master/test/channel_test.cpp
 
@@ -53,6 +58,11 @@ But to simplify the library usage, `cpp::channel` cannot be nil nor closed.
 
 Similar to Go, there are `cpp::ichannel<T, N>` and `cpp::ochannel<T, N>` that
 can only receive and send elements of type T, respectively.
+
+Noteworthy, channels are first-class values.  Consequently, we can have
+[channels of channels][chan-of-chan].
+
+[chan-of-chan]: http://golang.org/doc/effective_go.html#chan_of_chan
 
 ## Installation
 
