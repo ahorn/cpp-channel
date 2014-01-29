@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-#ifndef _CPP_CHANNEL_H
-#define _CPP_CHANNEL_H
+#ifndef CPP_CHANNEL_H
+#define CPP_CHANNEL_H
 
 #include <mutex>
 #include <deque>
@@ -21,22 +21,26 @@ namespace cpp
 namespace internal
 {
 
+#if __cplusplus <= 201103L
 // since C++14 in std, see Herb Sutter's blog
 template<class T, class ...Args>
 std::unique_ptr<T> make_unique(Args&& ...args)
 {
   return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
+#else
+  using std::make_unique;
+#endif
 
 template<class T>
-struct __is_exception_safe :
+struct _is_exception_safe :
   std::integral_constant<bool,
     std::is_nothrow_copy_constructible<T>::value or
     std::is_nothrow_move_constructible<T>::value>
 {};
 
 template<class T, std::size_t N>
-class __channel
+class _channel
 {
 static_assert(N < std::numeric_limits<std::size_t>::max(),
   "N must be strictly less than the largest possible size_t value");
@@ -51,9 +55,9 @@ private:
   bool m_is_send_done;
 
   template<typename U>
-  void __send(U&&);
+  void _send(U&&);
 
-  void __wait_until_nonempty(std::unique_lock<std::mutex>& lock)
+  void _wait_until_nonempty(std::unique_lock<std::mutex>& lock)
   {
     m_recv_cv.wait(lock, [this]{ return !m_buffer.empty(); });
   }
@@ -64,23 +68,23 @@ private:
   }
 
 public:
-  __channel(const __channel&) = delete;
+  _channel(const _channel&) = delete;
 
   // Propagates exceptions thrown by std::condition_variable constructor
-  __channel()
+  _channel()
   : m_mutex(), m_send_begin_cv(), m_send_end_cv(), m_recv_cv(),
     m_buffer(), m_is_send_done(true) {}
 
   // Propagates exceptions thrown by std::condition_variable::wait()
   void send(const T& t)
   {
-    __send(t);
+    _send(t);
   }
 
   // Propagates exceptions thrown by std::condition_variable::wait()
   void send(T&& t)
   {
-    __send(std::move(t));
+    _send(std::move(t));
   }
 
   // Propagates exceptions thrown by std::condition_variable::wait()
@@ -132,7 +136,7 @@ private:
   friend class ichannel<T, N>;
   friend class ochannel<T, N>;
 
-  std::shared_ptr<internal::__channel<T, N>> m_channel_ptr;
+  std::shared_ptr<internal::_channel<T, N>> m_channel_ptr;
 
 public:
   channel(const channel& other) noexcept
@@ -140,7 +144,7 @@ public:
 
   // Propagates exceptions thrown by std::condition_variable constructor
   channel()
-  : m_channel_ptr(std::make_shared<internal::__channel<T, N>>()) {}
+  : m_channel_ptr(std::make_shared<internal::_channel<T, N>>()) {}
 
   channel& operator=(const channel& other) noexcept
   {
@@ -179,7 +183,7 @@ public:
   // Propagates exceptions thrown by std::condition_variable::wait()
   T recv()
   {
-    static_assert(internal::__is_exception_safe<T>::value,
+    static_assert(internal::_is_exception_safe<T>::value,
       "Cannot guarantee exception safety, use another recv operator");
 
     return m_channel_ptr->recv();
@@ -204,7 +208,7 @@ class ichannel
 {
 private:
   friend class channel<T, N>;
-  std::shared_ptr<internal::__channel<T, N>> m_channel_ptr;
+  std::shared_ptr<internal::_channel<T, N>> m_channel_ptr;
 
 public:
   ichannel(const channel<T, N>& other) noexcept
@@ -232,7 +236,7 @@ public:
   // Propagates exceptions thrown by std::condition_variable::wait()
   T recv()
   {
-    static_assert(internal::__is_exception_safe<T>::value,
+    static_assert(internal::_is_exception_safe<T>::value,
       "Cannot guarantee exception safety, use another recv operator");
 
     return m_channel_ptr->recv();
@@ -258,7 +262,7 @@ class ochannel
 {
 private:
   friend class channel<T, N>;
-  std::shared_ptr<internal::__channel<T, N>> m_channel_ptr;
+  std::shared_ptr<internal::_channel<T, N>> m_channel_ptr;
 
 public:
   ochannel(const channel<T, N>& other) noexcept
@@ -322,13 +326,13 @@ bool channel<T, N>::operator!=(const ochannel<T, N>& other) const noexcept
 
 template<typename T, size_t N>
 template<typename U>
-void internal::__channel<T, N>::__send(U&& u)
+void internal::_channel<T, N>::_send(U&& u)
 {
   // unlock before notifying threads; otherwise, the
   // notified thread would unnecessarily block again
   {
     // wait (if necessary) until buffer is no longer full and any
-    // previous __send() is not blocking the sender any longer
+    // previous _send() is not blocking the sender any longer
     std::unique_lock<std::mutex> lock(m_mutex);
     m_send_begin_cv.wait(lock, [this]{ return !is_full() && m_is_send_done; });
     m_buffer.emplace_back(std::this_thread::get_id(), std::forward<U>(u));
@@ -349,18 +353,18 @@ void internal::__channel<T, N>::__send(U&& u)
     m_is_send_done = true;
   }
 
-  // see also scenario described in __channel<T, N>::recv()
+  // see also scenario described in _channel<T, N>::recv()
   m_send_begin_cv.notify_one();
 }
 
 template<typename T, size_t N>
-T internal::__channel<T, N>::recv()
+T internal::_channel<T, N>::recv()
 {
-  static_assert(internal::__is_exception_safe<T>::value,
+  static_assert(internal::_is_exception_safe<T>::value,
     "Cannot guarantee exception safety, use another recv operator");
 
   std::unique_lock<std::mutex> lock(m_mutex);
-  __wait_until_nonempty(lock);
+  _wait_until_nonempty(lock);
 
   std::pair<std::thread::id, T> pair(std::move(m_buffer.front()));
   assert(!is_full() || std::this_thread::get_id() != pair.first);
@@ -374,7 +378,7 @@ T internal::__channel<T, N>::recv()
 
   // nonblocking
   //
-  // Consider two concurrent __send() calls denoted by s and s'.
+  // Consider two concurrent _send() calls denoted by s and s'.
   // Suppose s waits to enqueue an element (i.e. m_send_begin_cv),
   // whereas s' waits for acknowledgment (i.e. m_send_end_cv) that
   // its previously enqueued element has been dequeued. Before s
@@ -384,17 +388,17 @@ T internal::__channel<T, N>::recv()
   // and m_buffer.size() <= N, i.e. !is_full(). Therefore, s can
   // proceed, as required.
   m_send_end_cv.notify_one();
-  return pair.second;
+  return std::move(pair.second);
 }
 
 template<typename T, size_t N>
-void internal::__channel<T, N>::recv(T& t)
+void internal::_channel<T, N>::recv(T& t)
 {
   // unlock before notifying threads; otherwise, the
   // notified thread would unnecessarily block again
   {
     std::unique_lock<std::mutex> lock(m_mutex);
-    __wait_until_nonempty(lock);
+    _wait_until_nonempty(lock);
 
     std::pair<std::thread::id, T> pair(std::move(m_buffer.front()));
     assert(!is_full() || std::this_thread::get_id() != pair.first);
@@ -405,15 +409,15 @@ void internal::__channel<T, N>::recv(T& t)
     t = std::move(pair.second);
   }
 
-  // as illustrated in __channel<T, N>::recv()
+  // as illustrated in _channel<T, N>::recv()
   m_send_end_cv.notify_one();
 }
 
 template<typename T, size_t N>
-std::unique_ptr<T> internal::__channel<T, N>::recv_ptr()
+std::unique_ptr<T> internal::_channel<T, N>::recv_ptr()
 {
   std::unique_lock<std::mutex> lock(m_mutex);
-  __wait_until_nonempty(lock);
+  _wait_until_nonempty(lock);
 
   std::pair<std::thread::id, T> pair(std::move(m_buffer.front()));
   assert(!is_full() || std::this_thread::get_id() != pair.first);
@@ -421,14 +425,13 @@ std::unique_ptr<T> internal::__channel<T, N>::recv_ptr()
   m_buffer.pop_front();
   assert(!is_full());
 
-  // TODO: use std when in C++14 mode
   std::unique_ptr<T> t_ptr(make_unique<T>(std::move(pair.second)));
 
   // unlock before notifying threads; otherwise, the
   // notified thread would unnecessarily block again
   lock.unlock();
 
-  // as illustrated in __channel<T, N>::recv()
+  // as illustrated in _channel<T, N>::recv()
   m_send_end_cv.notify_one();
   return t_ptr;
 }
