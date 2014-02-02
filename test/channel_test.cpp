@@ -67,7 +67,7 @@ void phil_different_person(size_t i, dining_table<N>& t)
   t.putsdown.at((i + 1) % N).send(i);
 }
 
-TEST(CrvFunctionalTest, DiningPhilosophersDeadlockFree)
+TEST(ChannelTest, DiningPhilosophersDeadlockFree)
 {
   constexpr size_t N = 5;
   dining_table<N> t;
@@ -109,7 +109,7 @@ void thread_b(cpp::channel<char> c)
   EXPECT_EQ('A', r);
 }
 
-TEST(CrvFunctionalTest, SenderReceiver)
+TEST(ChannelTest, SenderReceiver)
 {
   cpp::channel<char> c;
 
@@ -142,7 +142,7 @@ void receiver_thread_b(cpp::channel<char> c)
   EXPECT_TRUE(r == 'A' || r == 'B');
 }
 
-TEST(CrvFunctionalTest, SenderReceiverWithMultipleChannels)
+TEST(ChannelTest, SenderReceiverWithMultipleChannels)
 {
   cpp::channel<char> c;
 
