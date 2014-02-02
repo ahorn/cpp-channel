@@ -93,6 +93,84 @@ TEST(ChannelTest, DiningPhilosophersDeadlockFree)
   }
 }
 
+// Send the sequence 2, 3, 4, ..., N to channel 'c'
+template<size_t N>
+void generate_numbers(cpp::ochannel<unsigned> c)
+{
+  unsigned i = 2;
+  for (unsigned i = 2; i <= N; i++)
+  {
+    c.send(i);
+  }
+}
+
+// Copy number n from channel 'in' to channel 'out' if and
+// only if n is not divisible by 'prime' and n < N.
+template<size_t N>
+void filter_numbers(
+  cpp::ichannel<unsigned> in,
+  cpp::ochannel<unsigned> out,
+  const unsigned prime)
+{
+  unsigned i;
+  do
+  {
+    i = in.recv();
+    if (i % prime != 0)
+      out.send(i);
+  }
+  while (i < N);
+}
+
+// The prime sieve up to N: daisy-chain threads together
+template<size_t N>
+void sieve_numbers(cpp::channel<unsigned> primes)
+{
+  cpp::channel<unsigned> c;
+  std::vector<std::thread> threads;
+  threads.emplace_back(generate_numbers<N>, c);
+
+  unsigned prime;
+  for (;;)
+  {
+    prime = c.recv();
+    primes.send(prime);
+
+    if (prime >= N)
+      break;
+
+    cpp::channel<unsigned> c_prime;
+    threads.emplace_back(filter_numbers<N>, c, c_prime, prime);
+    c = c_prime;
+  }
+
+  for (std::thread& thread : threads)
+    thread.join();
+}
+
+// Classical inefficient concurrent prime sieve
+//
+// \see http://blog.onideas.ws/eratosthenes.go
+// \see http://golang.org/test/chan/sieve1.go
+TEST(ChannelTest, Sieve)
+{
+  constexpr unsigned N = 97;
+
+  cpp::channel<unsigned> primes;
+  std::thread sieve(sieve_numbers<N>, primes);
+  cpp::thread_guard sieve_guard(sieve);
+
+  std::vector<unsigned> expected = {2, 3, 5, 7, 11, 13, 17, 19, 23,
+                                    29, 31, 37, 41, 43, 47, 53, 59,
+                                    61, 67, 71, 73, 79, 83, 89, N};
+
+  for (unsigned expect : expected)
+  {
+    unsigned actual = primes.recv();
+    EXPECT_EQ(expect, actual);
+  }
+}
+
 void thread_a(cpp::channel<char> c)
 {
   c.send('A');
