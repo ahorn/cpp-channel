@@ -481,3 +481,212 @@ TEST(ChannelTest, IntraThreadAsynchronousChannel)
   EXPECT_EQ('B', char_b);
   EXPECT_EQ('C', char_c);
 }
+
+template<char Last>
+void send_chars(cpp::ochannel<char> out)
+{
+  for (char i = 'A'; i <= Last; i++)
+    out.send(i);
+}
+
+TEST(ChannelTest, SelectRecv)
+{
+  cpp::channel<char> c;
+  cpp::ichannel<char> in(c);
+  char i = '\0';
+
+  std::thread a(send_chars<'F'>, c);
+  cpp::thread_guard a_guard(a);
+
+  cpp::select().recv_only(c, i).wait();
+  EXPECT_EQ('A', i);
+
+  cpp::select().recv(c, i, [](){}).wait();
+  EXPECT_EQ('B', i);
+
+  cpp::select().recv_only(in, i).wait();
+  EXPECT_EQ('C', i);
+
+  cpp::select().recv(in, i, [](){}).wait();
+  EXPECT_EQ('D', i);
+
+  cpp::select().recv(c, [&i](const char k) { i = k; }).wait();
+  EXPECT_EQ('E', i);
+
+  cpp::select().recv(in, [&i](const char k) { i = k; }).wait();
+  EXPECT_EQ('F', i);
+}
+
+// N is the number of elements to receive, these are then stored in 'chars'
+template<size_t N>
+void recv_chars(cpp::ichannel<char> in, std::vector<char>& chars)
+{
+   for(size_t i = 0; i < N; i++)
+     chars.push_back(in.recv());
+}
+
+TEST(ChannelTest, SelectSend)
+{
+  constexpr size_t N = 8;
+
+  cpp::channel<char> c;
+  cpp::ochannel<char> out(c);
+  std::vector<char> chars;
+  unsigned i = 0;
+
+  std::thread a(recv_chars<N>, c, std::ref(chars));
+  cpp::thread_guard a_guard(a);
+
+  cpp::select().send_only(c, 'A').wait();
+
+  char char_b = 'B';
+  cpp::select().send_only(c, char_b).wait();
+
+  cpp::select().send_only(out, 'C').wait();
+
+  char char_d = 'D';
+  cpp::select().send_only(out, char_d).wait();
+
+  cpp::select().send(c, 'E', [&i](){ i++; }).wait();
+  EXPECT_EQ(1, i);
+
+  char char_f = 'F';
+  cpp::select().send(c, char_f, [&i](){ i++; }).wait();
+  EXPECT_EQ(2, i);
+
+  cpp::select().send(out, 'G', [&i](){ i++; }).wait();
+  EXPECT_EQ(3, i);
+
+  char char_h = 'H';
+  cpp::select().send(out, char_h, [&i](){ i++; }).wait();
+  EXPECT_EQ(4, i);
+
+  a.join();
+
+  EXPECT_EQ(N, chars.size());
+  for (size_t i = 0; i < N; i++)
+    EXPECT_EQ('A' + i, chars.at(i));
+}
+
+// \see http://golang.org/test/chan/select4.go
+TEST(ChannelTest, SelectOnlyAvailable)
+{
+  constexpr size_t N = 8;
+
+  cpp::channel<unsigned, 1> c;
+  cpp::channel<unsigned> c_prime;
+  c.send(42);
+
+  unsigned v = 0;
+  cpp::select select;
+  select.recv(c_prime, [](const unsigned k){ throw "Bug"; });
+  select.recv_only(c, v);
+  select.wait();
+  EXPECT_EQ(42, v);
+}
+
+void select_deque_1(cpp::ichannel<bool> c1)
+{
+  c1.recv();
+}
+
+void select_deque_2(
+  cpp::ichannel<bool> c1,
+  cpp::ichannel<bool> c2,
+  cpp::ochannel<bool> c3)
+{
+  cpp::select select;
+  select.recv(c1, [](const bool k){ throw "Bug"; });
+  select.recv(c2, [&c3](const bool k){ c3.send(true); });
+  select.wait();
+  c1.recv();
+}
+
+void select_deque_3(cpp::ochannel<bool> c2)
+{
+  c2.send(true);
+}
+
+// \see http://golang.org/test/chan/select6.go
+// \see http://code.google.com/p/go/issues/detail?id=2075
+TEST(ChannelTest, SelectDeque)
+{
+  cpp::channel<bool> c1;
+  cpp::channel<bool> c2;
+  cpp::channel<bool> c3;
+
+  std::thread t1(select_deque_1, c1);
+  cpp::thread_guard t1_guard(t1);
+
+  std::thread t2(select_deque_2, c1, c2, c3);
+  cpp::thread_guard t2_guard(t2);
+
+  std::thread t3(select_deque_3, c2);
+  cpp::thread_guard t3_guard(t3);
+
+  c3.recv();
+  c1.send(true);
+  c1.send(true);
+}
+
+void discard_recv1(cpp::ichannel<int> c)
+{
+  c.recv();
+}
+
+void discard_recv2(cpp::ichannel<int> c)
+{
+  int k;
+  cpp::select().recv_only(c, k).wait();
+}
+
+void discard_recv3(cpp::ichannel<int> c)
+{
+  cpp::channel<int> c2;
+  int k;
+  cpp::select().recv_only(c, k).recv_only(c2, k).wait();
+}
+
+template<class Recv>
+void discard_send1(Recv f)
+{
+  cpp::channel<int> c;
+  std::thread t(f, c);
+  cpp::thread_guard t_guard(t);
+  c.send(1);
+}
+
+template<class Recv>
+void discard_send2(Recv f)
+{
+  cpp::channel<int> c;
+  std::thread t(f, c);
+  cpp::thread_guard t_guard(t);
+  cpp::select().send_only(c, 1).wait();
+}
+
+template<class Recv>
+void discard_send3(Recv f)
+{
+  cpp::channel<int> c;
+  std::thread t(f, c);
+  cpp::thread_guard t_guard(t);
+  cpp::channel<int> c2;
+  cpp::select().send_only(c, 1).send_only(c2, 1).wait();
+}
+
+// \see http://golang.org/test/chan/select7.go
+// TODO: support the case where both ends of a channel are inside a select
+TEST(ChannelTest, SelectDiscard)
+{
+  discard_send1(discard_recv1);
+  discard_send2(discard_recv1);
+  discard_send3(discard_recv1);
+
+  discard_send1(discard_recv2);
+  // discard_send2(discard_recv2);
+  // discard_send3(discard_recv2);
+  discard_send1(discard_recv3);
+  // discard_send2(discard_recv3);
+  // discard_send3(discard_recv3);
+}
