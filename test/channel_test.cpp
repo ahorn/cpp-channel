@@ -690,3 +690,40 @@ TEST(ChannelTest, SelectDiscard)
   // discard_send2(discard_recv3);
   // discard_send3(discard_recv3);
 }
+
+TEST(ChannelTest, SelectWaitSleep)
+{
+  // This test verifies that the semantics of the wait
+  // do not get changed by optional sleep argument
+  cpp::channel<char> c;
+  cpp::ichannel<char> in(c);
+  char i = '\0';
+
+  // Various durations. Hours and minutes bypassed because we don't
+  // want the test take too long
+  std::chrono::nanoseconds sleepNano(20);
+  std::chrono::nanoseconds sleepMicro(20);
+  std::chrono::nanoseconds sleepMilli(20);
+  std::chrono::nanoseconds sleepSeconds(1);
+
+  std::thread a(send_chars<'F'>, c);
+  cpp::thread_guard a_guard(a);
+
+  cpp::select().recv_only(c, i).wait(sleepNano);
+  EXPECT_EQ('A', i);
+
+  cpp::select().recv(c, i, [](){}).wait(sleepMicro);
+  EXPECT_EQ('B', i);
+
+  cpp::select().recv_only(in, i).wait(sleepMilli);
+  EXPECT_EQ('C', i);
+
+  cpp::select().recv(in, i, [](){}).wait(sleepSeconds);
+  EXPECT_EQ('D', i);
+
+  cpp::select().recv(c, [&i](const char k) { i = k; }).wait(sleepNano);
+  EXPECT_EQ('E', i);
+
+  cpp::select().recv(in, [&i](const char k) { i = k; }).wait(sleepNano);
+  EXPECT_EQ('F', i);
+}

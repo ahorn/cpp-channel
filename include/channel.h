@@ -625,6 +625,22 @@ public:
         break;
     }
   }
+
+  // Propagates any exception thrown by std::this_thread::sleep_for
+  template<class Rep, class Period>
+  void wait(const std::chrono::duration<Rep, Period>& sleep)
+  {
+    const try_functions::size_type n = m_try_functions.size();
+    try_functions::size_type i = random_gen();
+    for(;;)
+    {
+      i = (i + 1) % n;
+      if (m_try_functions.at(i)())
+        break;
+
+      std::this_thread::sleep_for(sleep);
+    }
+  }
 };
 
 template<class T, std::size_t N>
