@@ -519,14 +519,12 @@ private:
   typedef std::vector<try_function> try_functions;
   try_functions m_try_functions;
 
-  std::random_device random_device;
   std::mt19937 random_gen;
 
 public:
   select()
   : m_try_functions(),
-    random_device(),
-    random_gen(random_device()) {}
+    random_gen(std::time(nullptr)) {}
 
   /* send cases */
 
