@@ -702,9 +702,9 @@ TEST(ChannelTest, SelectWaitSleep)
   // Various durations. Hours and minutes bypassed because we don't
   // want the test take too long
   std::chrono::nanoseconds sleepNano(20);
-  std::chrono::nanoseconds sleepMicro(20);
-  std::chrono::nanoseconds sleepMilli(20);
-  std::chrono::nanoseconds sleepSeconds(1);
+  std::chrono::microseconds sleepMicro(20);
+  std::chrono::milliseconds sleepMilli(20);
+  std::chrono::seconds sleepSeconds(1);
 
   std::thread a(send_chars<'F'>, c);
   cpp::thread_guard a_guard(a);
